@@ -1,6 +1,6 @@
-[![MacOS Build for GNU Emacs](https://github.com/nohzafk/bendmacs.app/actions/workflows/build.yml/badge.svg)](https://github.com/nohzafk/bendmacs.app/actions/workflows/build.yml)
+[![MacOS Build for GNU Emacs](https://github.com/nohzafk/emacs-plinth/actions/workflows/build.yml/badge.svg)](https://github.com/nohzafk/emacs-plinth/actions/workflows/build.yml)
 
-# bendmacs.app
+# emacs-plinth
 
 GNU Emacs 31.1 as a self-contained `Emacs.app` for Apple-silicon Macs.
 Every library Emacs uses is compiled from source and linked statically
@@ -56,11 +56,11 @@ bendmacs and bendcord.el.
 Download the release asset and its digest, and check one against the other:
 
 ```bash
-curl -fLO https://github.com/nohzafk/bendmacs.app/releases/download/emacs-31.1-bendmacs.6/Emacs-31.1-bendmacs.6.tar.xz
+curl -fLO https://github.com/nohzafk/emacs-plinth/releases/download/emacs-31.1-bendmacs.6/Emacs-31.1-bendmacs.6.tar.xz
 ```
 
 ```bash
-curl -fLO https://github.com/nohzafk/bendmacs.app/releases/download/emacs-31.1-bendmacs.6/Emacs-31.1-bendmacs.6.tar.xz.sha256
+curl -fLO https://github.com/nohzafk/emacs-plinth/releases/download/emacs-31.1-bendmacs.6/Emacs-31.1-bendmacs.6.tar.xz.sha256
 ```
 
 ```bash
@@ -111,6 +111,10 @@ and this repository's build number, and never moves:
 | Title | Emacs 31.1, bendmacs build 6 |
 | Asset | `Emacs-31.1-bendmacs.6.tar.xz`, a tarball holding `Emacs.app` |
 | Digest | `Emacs-31.1-bendmacs.6.tar.xz.sha256`, beside the asset |
+
+New releases use `emacs-<version>-plinth.<N>` tags and
+`Emacs-<version>-plinth.<N>.tar.xz` assets. The build numbers continue
+from 7; published builds 1–6 keep their `bendmacs.<N>` tags and assets.
 
 The build number is `EMACS_BUILD_NUMBER` in `scripts/emacs-source.lock`.
 Bump it by hand whenever the patch set, the configure arguments, or a
@@ -337,7 +341,9 @@ This repository was forked from
 [RadioNoiseE/ebuild](https://github.com/RadioNoiseE/ebuild) and renamed
 bendmacs-emacs, because the name collided with Gentoo's ebuild and said
 nothing of what the repository now is, then bendmacs.app, after the
-artifact it builds. The bundle's marker files
+artifact it builds. It became emacs-plinth because macOS treated the checkout
+as an application bundle due to the `.app` suffix, and the build does not
+depend on bendmacs, so it has a name of its own. The bundle's marker files
 (`ebuild-*.txt`) and the scripts' `EBUILD_*` variables keep the old name:
 the markers are inside bundles already published, and the variables are
 identifiers only.

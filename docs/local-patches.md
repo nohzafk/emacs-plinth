@@ -1,6 +1,6 @@
 # The local patches: why, and how
 
-This repository, bendmacs.app, ships the emacs-plus UI patches and, on
+This repository, emacs-plinth, ships the emacs-plus UI patches and, on
 top of them, a small set of local patches: two to Emacs's xwidget support
 on macOS, and one to how a child frame grows, because that is where most
 of those views are shown. This document is the reasoning behind the local

@@ -238,7 +238,7 @@ jobs:
           test "$(cat "$resources/ebuild-source.txt")" = "$(emacs_source_metadata)"
           test "$(cat "$resources/ebuild-patches.txt")" = "$(emacs_patches_metadata)"
           {
-            printf '%s for macOS on Apple silicon: build %s of bendmacs.app.\n\n' \
+            printf '%s for macOS on Apple silicon: build %s of emacs-plinth.\n\n' \
               "$EMACS_SOURCE_RELEASE_NAME" "$EMACS_BUILD_NUMBER"
             printf -- '- Source: %s at `%s`, the commit the upstream tag `%s` points at.\n' \
               "$EMACS_SOURCE_REPOSITORY" "$EMACS_SOURCE_REVISION" "$EMACS_SOURCE_RELEASE_TAG"
