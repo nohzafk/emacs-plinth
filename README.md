@@ -254,53 +254,35 @@ Each checkout has its own `.git`, so Emacs build metadata comes from Emacs, not
 this repository. The commit is the Emacs 31.1 release commit, though it
 is fetched from Git rather than from the GNU release tarball.
 
-Source and default output directories include the full SHA. Existing source
-caches must have their own `.git`, the locked `HEAD`, and the expected origin.
-Existing output must have matching `Contents/Resources/ebuild-source.txt`
-source provenance, `Contents/Resources/ebuild-patches.txt` patch provenance,
-and `Contents/Resources/ebuild-configure.txt` requested configure arguments
-before it can be reused. The configure marker records `CFLAGS`, `PKG_CONFIG`,
-all explicit options, and the local prefix when supplied. A same-source,
-same-patch app with different requested arguments (or no configure marker)
-is rejected and preserved. This is not a full build-recipe fingerprint:
-dependency bytes, inherited environment, compiler/SDK versions, and
-configure's detected results are not covered.
+The Emacs checkout must have its own `.git`, the locked revision, and the expected origin. The build allows tracked changes from the pinned patches.
 
-The source marker records only the revision, so the patch marker records a
-digest of the exact ordered patch set (and its upstream provenance); a
-same-source app built from a different patch set is therefore rejected
-instead of silently reused. A mismatch (including an unmarked old app passed
-via `OUT` or in `build/Emacs.app`) stops with an error; nothing is deleted
-automatically. Tracked source changes from these patches are allowed. These
-checks identify the source and the patch set; they do not certify compile or
-GUI behaviour.
+[`scripts/deps.lock`](scripts/deps.lock) pins the 19 dependency archives used by local and CI builds. Each row gives the stage, SHA-256, HTTPS URL, and extracted directory. Before extracting an archive, the build checks its bytes against the lock, including archives found in the download cache. To update a dependency, verify the new upstream archive and update its row.
 
-The source directory and its label stay keyed to the exact revision because
-they are cache keys; the release tag and asset are named by version and
-build number instead. The app bundle is always `Emacs.app`.
+A reusable app has four markers under `Contents/Resources/`:
+
+| Marker | What it identifies |
+| --- | --- |
+| `ebuild-source.txt` | Emacs source revision |
+| `ebuild-patches.txt` | Ordered patches and their provenance |
+| `ebuild-configure.txt` | Requested flags, options, and local prefix |
+| `ebuild-deps.txt` | SHA-256 of the complete dependency lockfile |
+
+The dependency marker identifies source archives, not installed library binaries. These markers do not identify the compiler, SDK, inherited environment, or configure's detected results. CI names the release by version and build number; the bundle is always `Emacs.app`.
 
 ## Local build
 
-`scripts/build.sh` runs the same stages as CI, but installs every
-dependency into a local prefix (`build/prefix/`) instead of `/usr/local`, so
-it does not touch the system or a Homebrew install.
+`scripts/build.sh` installs into a private prefix rather than `/usr/local`. By default, the prefix, work directory, and app all live under `build/deps-<lock-SHA256>/`. Changing the lock selects fresh directories and leaves previous builds intact.
 
 ```bash
-./scripts/build.sh                # output: build/emacs-31-snapshot-<full-SHA>/Emacs.app
-./scripts/build.sh emacs          # rebuild only Emacs (deps already done)
+./scripts/build.sh                # build all dependencies and Emacs
+./scripts/build.sh emacs          # Emacs stage only; build dependencies first
 OUT="$PWD/build/try/Emacs.app" ./scripts/build.sh emacs
 PREFIX=/tmp/foo ./scripts/build.sh
 ```
 
-Each dependency leaves a sentinel in the prefix, so a rerun after a
-failure resumes. An existing output is reused only when its three markers
-match the source, the patch set, and the configure arguments of this
-checkout and its code signature passes verification. When a marker differs,
-the build stops and deletes nothing: an app built from another patch set is
-never overwritten. Set `OUT` to a new path to build next to it; it must be
-absolute, because the Emacs stage copies the app from inside the source
-directory. A local build is not a release and carries no build number; only
-CI publishes.
+The default app path is `build/deps-<lock-SHA256>/emacs-31-snapshot-<Emacs-revision>/Emacs.app`. Rerunning with the same lock skips installed dependencies. The build reuses an app only if all four markers match and its signature verifies.
+
+If you override `PREFIX` or `WORK`, use a fresh directory or one already marked for this lock. For `OUT`, use an absolute path to a new or matching app. The build refuses mismatched caches rather than deleting them. Local builds carry no release number; only CI publishes.
 
 ## Tests
 
@@ -308,10 +290,7 @@ The tests are offline: they need no Emacs source, no download, and no build
 stage.
 
 ```bash
-env -u BASH_ENV python3 tests/test_source_pin.py
-env -u BASH_ENV python3 tests/test_ui_patches.py
-env -u BASH_ENV python3 tests/test_configure_policy.py
-env -u BASH_ENV python3 tests/test_bundle_sign.py
+env -u BASH_ENV python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
 `BASH_ENV` is unset because every bash the tests start would source it,
@@ -326,7 +305,8 @@ here), for instance taken from a source checkout's own `HEAD`:
 
 ```bash
 mkdir -p /tmp/ui-targets
-git -C build/work/emacs-31-snapshot-<full-SHA> archive HEAD src lisp/term | tar -x -C /tmp/ui-targets
+lock_sha=$(shasum -a 256 scripts/deps.lock | cut -d ' ' -f 1)
+git -C "build/deps-$lock_sha/work/emacs-31-snapshot-<full-SHA>" archive HEAD src lisp/term | tar -x -C /tmp/ui-targets
 EBUILD_UI_TARGETS=/tmp/ui-targets env -u BASH_ENV python3 tests/test_ui_patches.py
 ```
 

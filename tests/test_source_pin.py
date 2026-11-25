@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Offline source-lock checks. No build stages, source downloads, or dependencies."""
+from hashlib import sha256
 import os
 from pathlib import Path
 import re
@@ -14,6 +15,7 @@ PIN = "a360712c9d272d950d8d8255ef74570f7e90b7d9"
 ORIGIN = "https://github.com/emacs-mirror/emacs.git"
 LOCAL = (ROOT / "scripts/build.sh").read_text()
 CI = (ROOT / ".github/workflows/build.yml").read_text()
+DEPS_LOCK = ROOT / "scripts/deps.lock"
 
 
 def run_block(name):
@@ -103,21 +105,35 @@ esac
         (self.work / name / ".git").mkdir(parents=True)
 
     def test_local_and_ci_share_lock_and_labels(self):
-        # Evaluate local setup only; never evaluate any stage or mkdir/export setup.
-        setup = LOCAL.split('mkdir -p "$PREFIX" "$WORK"', 1)[0]
+        # Evaluate path declarations only, never setup that writes to the cache.
+        boundary = "\n# Build cache setup.\n"
+        self.assertIn(boundary, LOCAL)
+        setup = LOCAL.split(boundary, 1)[0]
         self.assertIn('source "$REPO_ROOT/scripts/emacs-source.sh"', setup)
         # Supply REPO_ROOT, then evaluate only declarations after its assignment.
-        declarations = setup.split('REPO_ROOT="', 1)[1].split('\n', 1)[1]
+        declarations = setup.split('REPO_ROOT="', 1)[1].split("\n", 1)[1]
         self.env["REPO_ROOT"] = str(ROOT)
         self.env["JOBS"] = "1"
-        for key in ("PREFIX", "WORK", "OUT"):
+        for key in ("PREFIX", "WORK", "OUT", "EBUILD_DEPS_LOCK"):
             self.env.pop(key, None)
-        local = subprocess.run(["bash", "-eu", "-c", declarations +
-                                '\nprintf "%s\\n" "$EMACS_SOURCE_REVISION" "$EMACS_SOURCE_LABEL" "$OUT"'],
-                               env=self.env, text=True, capture_output=True)
+        local = subprocess.run(
+            [
+                "bash",
+                "-eu",
+                "-c",
+                declarations
+                + '\nprintf "%s\\n" "$EMACS_SOURCE_REVISION" "$EMACS_SOURCE_LABEL" "$OUT"',
+            ],
+            env=self.env,
+            text=True,
+            capture_output=True,
+        )
         self.assertEqual(local.returncode, 0, local.stderr)
-        self.assertEqual(local.stdout.splitlines(), [PIN, f"31-snapshot-{PIN}",
-                         str(ROOT / f"build/emacs-31-snapshot-{PIN}/Emacs.app")])
+        deps_digest = sha256(DEPS_LOCK.read_bytes()).hexdigest()
+        out = ROOT / f"build/deps-{deps_digest}/emacs-31-snapshot-{PIN}/Emacs.app"
+        self.assertEqual(
+            local.stdout.splitlines(), [PIN, f"31-snapshot-{PIN}", str(out)]
+        )
         self.env["GITHUB_WORKSPACE"] = str(ROOT)
         self.env["GITHUB_ENV"] = str(self.work / "ci-env")
         p = subprocess.run(["bash", "-eu", "-c", run_block("Load Emacs source lock")],
@@ -315,11 +331,23 @@ esac
         src = ws / f"emacs-31-snapshot-{PIN}"
         src.mkdir()
         self.env["GITHUB_WORKSPACE"] = str(ws)
-        subprocess.run(["bash", "-eu", "-c",
-                        'source "$GITHUB_WORKSPACE/scripts/emacs-source.sh"\n'
-                        'source "$GITHUB_WORKSPACE/scripts/emacs-patches.sh"\n'
-                        f'cd "{src}"\nemacs_mark_output Emacs.app\nemacs_mark_patches Emacs.app'],
-                       env=self.env, check=True)
+        subprocess.run(
+            [
+                "bash",
+                "-eu",
+                "-c",
+                'source "$GITHUB_WORKSPACE/scripts/emacs-source.sh"\n'
+                'source "$GITHUB_WORKSPACE/scripts/emacs-patches.sh"\n'
+                f'cd "{src}"\nemacs_mark_output Emacs.app\nemacs_mark_patches Emacs.app',
+            ],
+            env=self.env,
+            check=True,
+        )
+        self.env.pop("EBUILD_DEPS_LOCK", None)
+        deps_digest = sha256(DEPS_LOCK.read_bytes()).hexdigest()
+        (src / "Emacs.app/Contents/Resources/ebuild-deps.txt").write_text(
+            deps_digest + "\n"
+        )
         return src
 
     def test_release_notes_describe_the_bundle(self):
@@ -335,6 +363,8 @@ esac
                                          "build 7 of emacs-plinth.\n"), notes)
         self.assertIn(f"`{PIN}`", notes)
         self.assertIn(f"`patchset={digest}`", notes)
+        deps_digest = sha256(DEPS_LOCK.read_bytes()).hexdigest()
+        self.assertIn(f"Dependency lock SHA-256: `{deps_digest}`", notes)
         lock = (ROOT / "patches/ui-patches.lock").read_text().splitlines()
         patches = [line.split("\t")[1] for line in lock if line and not line.startswith("#")]
         listed = re.findall(r"^  - `(.+)`$", notes, re.M)
@@ -351,6 +381,32 @@ esac
                            env=self.env, text=True, capture_output=True)
         self.assertNotEqual(p.returncode, 0)
         self.assertFalse((src / "release-notes.md").exists())
+
+    def test_release_notes_refuse_a_missing_or_mismatched_dependency_marker(self):
+        src = self.release_workspace()
+        marker = src / "Emacs.app/Contents/Resources/ebuild-deps.txt"
+        for content in (None, "0" * 64 + "\n"):
+            with self.subTest(content=content):
+                if content is None:
+                    marker.unlink()
+                else:
+                    marker.write_text(content)
+                p = subprocess.run(
+                    [
+                        "bash",
+                        "-eu",
+                        "-o",
+                        "pipefail",
+                        "-c",
+                        run_block("Write release notes"),
+                    ],
+                    env=self.env,
+                    text=True,
+                    capture_output=True,
+                )
+                self.assertNotEqual(p.returncode, 0)
+                self.assertIn("dependency lock marker", p.stderr)
+                self.assertFalse((src / "release-notes.md").exists())
 
     def test_full_sha_cannot_be_overridden_by_environment(self):
         self.env["EMACS_SOURCE_REVISION"] = "master"

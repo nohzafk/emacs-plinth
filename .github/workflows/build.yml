@@ -87,63 +87,63 @@ jobs:
           eval $(/usr/libexec/path_helper -s)
       - name: Install GNU M4
         run: |
-          curl $CURL_OPTS -O https://ftpmirror.gnu.org/gnu/m4/m4-1.4.21.tar.xz
-          tar -Jxf m4-1.4.21.tar.xz && cd m4-1.4.21
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep m4
           ./configure && make -j4
           sudo make install
       - name: Install GNU Autoconf
         run: |
-          curl $CURL_OPTS -O https://ftpmirror.gnu.org/gnu/autoconf/autoconf-2.72.tar.xz
-          tar -Jxf autoconf-2.72.tar.xz && cd autoconf-2.72
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep autoconf
           ./configure && make -j4
           sudo make install
       - name: Install GNU Automake
         run: |
-          curl $CURL_OPTS -O https://ftpmirror.gnu.org/gnu/automake/automake-1.18.tar.xz
-          tar -Jxf automake-1.18.tar.xz && cd automake-1.18
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep automake
           ./configure && make -j4
           sudo make install
       - name: Install GNU Libtool
         run: |
-          curl $CURL_OPTS -O https://ftpmirror.gnu.org/gnu/libtool/libtool-2.5.4.tar.xz
-          tar -Jxf libtool-2.5.4.tar.xz && cd libtool-2.5.4
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep libtool
           ./configure --disable-shared && make -j4
           sudo make install
       - name: Install Pkgconf
         run: |
-          curl $CURL_OPTS -O https://github.com/pkgconf/pkgconf/archive/refs/tags/pkgconf-2.5.1.tar.gz
-          tar -zxf pkgconf-2.5.1.tar.gz && cd pkgconf-pkgconf-2.5.1
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep pkgconf
           ./autogen.sh && ./configure --disable-shared && make -j4
           sudo make install
           sudo ln -s /usr/local/bin/pkgconf /usr/local/bin/pkg-config
       - name: Install GNU Texinfo
         run: |
-          curl $CURL_OPTS -O https://ftpmirror.gnu.org/gnu/texinfo/texinfo-7.3.tar.xz
-          tar -Jxf texinfo-7.3.tar.xz && cd texinfo-7.3
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep texinfo
           ./configure && make -j4
           sudo make install
       - name: Install GNU Libiconv
         run: |
-          curl $CURL_OPTS -O https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.19.tar.gz
-          tar -zxf libiconv-1.19.tar.gz && cd libiconv-1.19
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep libiconv
           ./configure --disable-shared && make -j4
           sudo make install
       - name: Install GNU Libunistring
         run: |
-          curl $CURL_OPTS -O https://ftpmirror.gnu.org/gnu/libunistring/libunistring-1.4.2.tar.xz
-          tar -Jxf libunistring-1.4.2.tar.xz && cd libunistring-1.4.2
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep libunistring
           ./configure --disable-shared && make -j4
           sudo make install
       - name: Install GNU Gettext
         run: |
-          curl $CURL_OPTS -O https://ftpmirror.gnu.org/gnu/gettext/gettext-0.26.tar.xz
-          tar -Jxf gettext-0.26.tar.xz && cd gettext-0.26
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep gettext
           ./configure --disable-shared && make -j4
           sudo make install
       - name: Install GNU Ncurses
         run: |
-          curl $CURL_OPTS -O https://ftpmirror.gnu.org/gnu/ncurses/ncurses-6.6.tar.gz
-          tar -zxf ncurses-6.6.tar.gz && cd ncurses-6.6
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep ncurses
           ./configure --disable-shared \
                      --with-terminfo-dirs=/usr/share/terminfo:/usr/local/share/terminfo \
             && make -j4
@@ -151,57 +151,57 @@ jobs:
           sudo ln -s /usr/local/include/ncursesw/curses.h /usr/local/include/ncurses.h
       - name: Install Zlib
         run: |
-          curl $CURL_OPTS -O https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.xz
-          tar -Jxf zlib-1.3.2.tar.xz && cd zlib-1.3.2
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep zlib
           ./configure --static && make -j4
           sudo make install
       - name: Install Libwebp
         run: |
-          curl $CURL_OPTS -O https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz
-          tar -zxf libwebp-1.6.0.tar.gz && cd libwebp-1.6.0
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep libwebp
           ./configure --disable-shared && make -j4
           sudo make install
       - name: Install Libxml2
         run: |
-          curl $CURL_OPTS -O https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.2.tar.xz
-          tar -Jxf libxml2-2.15.2.tar.xz && cd libxml2-2.15.2
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep libxml2
           ./configure --disable-shared && make -j4
           sudo make install
       - name: Install GNU Libgmp
         run: |
-          curl $CURL_OPTS -O https://ftpmirror.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz
-          tar -Jxf gmp-6.3.0.tar.xz && cd gmp-6.3.0
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep gmp
           ./configure --disable-shared && make -j4
           sudo make install
       - name: Install Libnettle
         run: |
-          curl $CURL_OPTS -O https://ftpmirror.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz
-          tar -zxf nettle-3.10.2.tar.gz && cd nettle-3.10.2
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep nettle
           ./configure --disable-shared && make -j4
           sudo make install
       - name: Install Libidn2
         run: |
-          curl $CURL_OPTS -O https://ftpmirror.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz
-          tar -zxf libidn2-2.3.8.tar.gz && cd libidn2-2.3.8
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep libidn2
           ./configure --disable-shared && make -j4
           sudo make install
       - name: Install GnuTLS
         run: |
-          curl $CURL_OPTS -O https://www.gnupg.org/ftp/gcrypt/gnutls/v3.8/gnutls-3.8.12.tar.xz
-          tar -Jxf gnutls-3.8.12.tar.xz && cd gnutls-3.8.12
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep gnutls
           ./configure --disable-shared --with-included-libtasn1 --without-p11-kit && make -j4
           sudo make install
       - name: Install Libtreesitter
         run: |
-          curl $CURL_OPTS -O https://github.com/tree-sitter/tree-sitter/archive/refs/tags/v0.25.10.tar.gz
-          tar -zxf v0.25.10.tar.gz && cd tree-sitter-0.25.10
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep treesitter
           make -j4
           sudo make install
           sudo find /usr/local/lib -name 'libtree-sitter*.dylib' -delete
       - name: Install GNU Gzip
         run: |
-          curl $CURL_OPTS -O https://ftpmirror.gnu.org/gnu/gzip/gzip-1.14.tar.xz
-          tar -Jxf gzip-1.14.tar.xz && cd gzip-1.14
+          source "$GITHUB_WORKSPACE/scripts/emacs-ci-deps.sh"
+          emacs_ci_prepare_dep gzip
           ./configure && make -j4
           sudo make install
       - name: Build Emacs
@@ -210,6 +210,7 @@ jobs:
           source "$GITHUB_WORKSPACE/scripts/emacs-patches.sh"
           source "$GITHUB_WORKSPACE/scripts/emacs-configure.sh"
           source "$GITHUB_WORKSPACE/scripts/emacs-sign.sh"
+          source "$GITHUB_WORKSPACE/scripts/emacs-deps.sh"
           emacs_prepare_source "$GITHUB_WORKSPACE/$EMACS_SOURCE_DIR"
           cd "$GITHUB_WORKSPACE/$EMACS_SOURCE_DIR"
           # Fixed, vendored emacs-plus/local UI patch set.  Same ordered,
@@ -224,6 +225,7 @@ jobs:
           emacs_mark_output Emacs.app
           emacs_mark_patches Emacs.app
           emacs_mark_configuration Emacs.app
+          emacs_deps_digest > Emacs.app/Contents/Resources/ebuild-deps.txt
           emacs_sign_bundle Emacs.app
           tar -Jcf "$EMACS_ARTIFACT" Emacs.app
           shasum -a 256 "$EMACS_ARTIFACT" > "$EMACS_ARTIFACT.sha256"
@@ -231,12 +233,18 @@ jobs:
         run: |
           source "$GITHUB_WORKSPACE/scripts/emacs-source.sh"
           source "$GITHUB_WORKSPACE/scripts/emacs-patches.sh"
+          source "$GITHUB_WORKSPACE/scripts/emacs-deps.sh"
           cd "$GITHUB_WORKSPACE/$EMACS_SOURCE_DIR"
           # The notes describe the bundle being published: its markers must
           # be the ones this commit's locks produce.
           resources=Emacs.app/Contents/Resources
           test "$(cat "$resources/ebuild-source.txt")" = "$(emacs_source_metadata)"
           test "$(cat "$resources/ebuild-patches.txt")" = "$(emacs_patches_metadata)"
+          deps_digest="$(emacs_deps_digest)"
+          if ! printf '%s\n' "$deps_digest" | cmp -s "$resources/ebuild-deps.txt" -; then
+            echo "Missing or mismatched dependency lock marker: $resources/ebuild-deps.txt" >&2
+            exit 1
+          fi
           {
             printf '%s for macOS on Apple silicon: build %s of emacs-plinth.\n\n' \
               "$EMACS_SOURCE_RELEASE_NAME" "$EMACS_BUILD_NUMBER"
@@ -247,6 +255,7 @@ jobs:
             emacs_patch_entries | while IFS=$'\t' read -r _ path; do
               printf '  - `%s`\n' "$path"
             done
+            printf -- '- Dependency lock SHA-256: `%s`, as recorded in `Contents/Resources/ebuild-deps.txt` inside the bundle.\n' "$deps_digest"
             printf -- '- No font is bundled. bendmacs installs RysMono from https://github.com/nohzafk/rysmono.\n'
             printf -- '- Verify the download: `shasum -a 256 -c %s.sha256`.\n' "$EMACS_ARTIFACT"
           } > release-notes.md

@@ -14,34 +14,66 @@
 # already-installed deps are skipped. Delete the sentinel (or $PREFIX) to
 # force a rebuild.
 set -euo pipefail
+unset CDPATH
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+REPO_ROOT="$(cd -P -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 source "$REPO_ROOT/scripts/emacs-source.sh"
 source "$REPO_ROOT/scripts/emacs-patches.sh"
 source "$REPO_ROOT/scripts/emacs-configure.sh"
 source "$REPO_ROOT/scripts/emacs-sign.sh"
-PREFIX="${PREFIX:-$REPO_ROOT/build/prefix}"
-WORK="${WORK:-$REPO_ROOT/build/work}"
-OUT="${OUT:-$REPO_ROOT/build/$EMACS_SOURCE_DIR/Emacs.app}"
+source "$REPO_ROOT/scripts/emacs-deps.sh"
+DEPS_DIGEST="$(emacs_deps_digest)"
+DEPS_ROOT="$REPO_ROOT/build/deps-$DEPS_DIGEST"
+PREFIX="${PREFIX:-$DEPS_ROOT/prefix}"
+WORK="${WORK:-$DEPS_ROOT/work}"
+OUT="${OUT:-$DEPS_ROOT/$EMACS_SOURCE_DIR/Emacs.app}"
 JOBS="${JOBS:-$(sysctl -n hw.ncpu)}"
 
-mkdir -p "$PREFIX" "$WORK"
+# Build cache setup.
+# Pin relative overrides to the caller before any stage changes directory.
+base="$(pwd -P)"
+[[ "$PREFIX" == /* ]] || PREFIX="$base/$PREFIX"
+[[ "$WORK" == /* ]] || WORK="$base/$WORK"
+[[ "$OUT" == /* ]] || OUT="$base/$OUT"
+
+deps_marker_matches() {
+  local marker="$1"
+  [[ -f "$marker" && ! -L "$marker" ]] &&
+    cmp -s -- "$marker" <(printf '%s\n' "$DEPS_DIGEST")
+}
+
+check_deps_cache() (
+  local dir="$1" entries
+  if [[ ! -e "$dir" && ! -L "$dir" ]]; then return 0; fi
+  if [[ -d "$dir" && -r "$dir" && -x "$dir" ]]; then
+    if deps_marker_matches "$dir/ebuild-deps.txt"; then return 0; fi
+    unset GLOBIGNORE
+    set +f
+    shopt -s nullglob dotglob
+    entries=("$dir"/*)
+    if [[ ${#entries[@]} == 0 ]]; then return 0; fi
+  fi
+  printf 'Emacs dependency/cache mismatch: %s has no matching dependency marker; use a fresh %s path (nothing was deleted).\n' "$dir" "$2" >&2
+  return 1
+)
+
+check_deps_cache "$PREFIX" PREFIX
+check_deps_cache "$WORK" WORK
+mkdir -p -- "$PREFIX" "$WORK"
+WORK="$(cd -P -- "$WORK" && pwd -P)"
+for dir in "$PREFIX" "$WORK"; do
+  marker="$dir/ebuild-deps.txt"
+  if ! deps_marker_matches "$marker"; then
+    (set -C; printf '%s\n' "$DEPS_DIGEST" > "$marker")
+  fi
+done
 export PATH="$PREFIX/bin:$PATH"
 export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 export LDFLAGS="-L$PREFIX/lib ${LDFLAGS:-}"
 export CPPFLAGS="-I$PREFIX/include ${CPPFLAGS:-}"
 
-CURL_OPTS=(--fail --retry 5 --retry-delay 5 --location --silent --show-error)
-
 log()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
 skip() { printf '\033[0;33m--\033[0m  %s (already built)\n' "$*"; }
-
-fetch() {
-  local url="$1" out
-  out="$(basename "$url")"
-  if [[ -s "$WORK/$out" ]]; then return; fi
-  ( cd "$WORK" && curl "${CURL_OPTS[@]}" -O "$url" )
-}
 
 extract() {
   local archive="$1" expect_dir="$2"
@@ -54,14 +86,15 @@ extract() {
 }
 
 # Build a configure-style autotools dependency.
-#   build_dep <name> <sentinel> <url> <srcdir> [-- configure args...]
+#   build_dep <stage> <name> <sentinel> [-- configure args...]
 build_dep() {
-  local name="$1" sentinel="$2" url="$3" srcdir="$4"; shift 4
+  local stage="$1" name="$2" sentinel="$3" srcdir archive; shift 3
   if [[ "${1:-}" == "--" ]]; then shift; fi
   if [[ -e "$PREFIX/$sentinel" ]]; then skip "$name"; return; fi
   log "$name"
-  fetch "$url"
-  extract "$(basename "$url")" "$srcdir"
+  srcdir="$(emacs_dep_srcdir "$stage")"
+  archive="$(emacs_dep_fetch "$stage" "$WORK")"
+  extract "$archive" "$srcdir"
   ( cd "$WORK/$srcdir" && ./configure --prefix="$PREFIX" "$@" && make -j"$JOBS" && make install )
 }
 
@@ -82,29 +115,31 @@ should_run() {
   [[ " $WANT " == *" $s "* ]]
 }
 
-stage_m4()           { build_dep "GNU M4"            bin/m4               https://ftpmirror.gnu.org/gnu/m4/m4-1.4.21.tar.xz                                    m4-1.4.21; }
-stage_autoconf()     { build_dep "GNU Autoconf"      bin/autoconf         https://ftpmirror.gnu.org/gnu/autoconf/autoconf-2.72.tar.xz                          autoconf-2.72; }
-stage_automake()     { build_dep "GNU Automake"      bin/automake         https://ftpmirror.gnu.org/gnu/automake/automake-1.18.tar.xz                          automake-1.18; }
-stage_libtool()      { build_dep "GNU Libtool"       bin/libtool          https://ftpmirror.gnu.org/gnu/libtool/libtool-2.5.4.tar.xz                           libtool-2.5.4 -- --disable-shared; }
-stage_texinfo()      { build_dep "GNU Texinfo"       bin/makeinfo         https://ftpmirror.gnu.org/gnu/texinfo/texinfo-7.3.tar.xz                             texinfo-7.3; }
-stage_libiconv()     { build_dep "GNU Libiconv"      lib/libiconv.a       https://ftpmirror.gnu.org/gnu/libiconv/libiconv-1.19.tar.gz                          libiconv-1.19   -- --disable-shared; }
-stage_libunistring() { build_dep "GNU Libunistring"  lib/libunistring.a   https://ftpmirror.gnu.org/gnu/libunistring/libunistring-1.4.2.tar.xz                 libunistring-1.4.2 -- --disable-shared; }
-stage_gettext()      { build_dep "GNU Gettext"       bin/msgfmt           https://ftpmirror.gnu.org/gnu/gettext/gettext-0.26.tar.xz                            gettext-0.26    -- --disable-shared; }
-stage_libxml2()      { build_dep "Libxml2"           lib/libxml2.a        https://download.gnome.org/sources/libxml2/2.15/libxml2-2.15.2.tar.xz                libxml2-2.15.2  -- --disable-shared; }
-stage_libwebp()      { build_dep "Libwebp"           lib/libwebp.a        https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-1.6.0.tar.gz libwebp-1.6.0 -- --disable-shared; }
-stage_gmp()          { build_dep "GNU GMP"           lib/libgmp.a         https://ftpmirror.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz                                   gmp-6.3.0       -- --disable-shared; }
-stage_nettle()       { build_dep "Nettle"            lib/libnettle.a      https://ftpmirror.gnu.org/gnu/nettle/nettle-3.10.2.tar.gz                            nettle-3.10.2   -- --disable-shared; }
-stage_libidn2()      { build_dep "Libidn2"           lib/libidn2.a        https://ftpmirror.gnu.org/gnu/libidn/libidn2-2.3.8.tar.gz                            libidn2-2.3.8   -- --disable-shared; }
-stage_gnutls()       { build_dep "GnuTLS"            lib/libgnutls.a      https://www.gnupg.org/ftp/gcrypt/gnutls/v3.8/gnutls-3.8.12.tar.xz                    gnutls-3.8.12   -- --disable-shared --with-included-libtasn1 --without-p11-kit; }
-stage_gzip()         { build_dep "GNU Gzip"          bin/gzip             https://ftpmirror.gnu.org/gnu/gzip/gzip-1.14.tar.xz                                  gzip-1.14; }
+stage_m4()           { build_dep m4 "GNU M4"            bin/m4; }
+stage_autoconf()     { build_dep autoconf "GNU Autoconf"      bin/autoconf; }
+stage_automake()     { build_dep automake "GNU Automake"      bin/automake; }
+stage_libtool()      { build_dep libtool "GNU Libtool"       bin/libtool -- --disable-shared; }
+stage_texinfo()      { build_dep texinfo "GNU Texinfo"       bin/makeinfo; }
+stage_libiconv()     { build_dep libiconv "GNU Libiconv"      lib/libiconv.a -- --disable-shared; }
+stage_libunistring() { build_dep libunistring "GNU Libunistring"  lib/libunistring.a -- --disable-shared; }
+stage_gettext()      { build_dep gettext "GNU Gettext"       bin/msgfmt -- --disable-shared; }
+stage_libxml2()      { build_dep libxml2 "Libxml2"           lib/libxml2.a -- --disable-shared; }
+stage_libwebp()      { build_dep libwebp "Libwebp"           lib/libwebp.a -- --disable-shared; }
+stage_gmp()          { build_dep gmp "GNU GMP"           lib/libgmp.a -- --disable-shared; }
+stage_nettle()       { build_dep nettle "Nettle"            lib/libnettle.a -- --disable-shared; }
+stage_libidn2()      { build_dep libidn2 "Libidn2"           lib/libidn2.a -- --disable-shared; }
+stage_gnutls()       { build_dep gnutls "GnuTLS"            lib/libgnutls.a -- --disable-shared --with-included-libtasn1 --without-p11-kit; }
+stage_gzip()         { build_dep gzip "GNU Gzip"          bin/gzip; }
 
 # Pkgconf: needs autogen.sh, plus pkg-config symlink.
 stage_pkgconf() {
+  local srcdir archive
   if [[ -e "$PREFIX/bin/pkgconf" ]]; then skip "Pkgconf"; return; fi
   log "Pkgconf"
-  fetch "https://github.com/pkgconf/pkgconf/archive/refs/tags/pkgconf-2.5.1.tar.gz"
-  extract "pkgconf-2.5.1.tar.gz" "pkgconf-pkgconf-2.5.1"
-  ( cd "$WORK/pkgconf-pkgconf-2.5.1"
+  srcdir="$(emacs_dep_srcdir pkgconf)"
+  archive="$(emacs_dep_fetch pkgconf "$WORK")"
+  extract "$archive" "$srcdir"
+  ( cd "$WORK/$srcdir"
     ./autogen.sh
     ./configure --prefix="$PREFIX" --disable-shared
     make -j"$JOBS"
@@ -115,11 +150,13 @@ stage_pkgconf() {
 # Ncurses: --with-terminfo-dirs so emacs -nw finds /usr/share/terminfo,
 # plus a curses.h compatibility symlink.
 stage_ncurses() {
+  local srcdir archive
   if [[ -e "$PREFIX/lib/libncursesw.a" ]]; then skip "Ncurses"; return; fi
   log "Ncurses"
-  fetch "https://ftpmirror.gnu.org/gnu/ncurses/ncurses-6.6.tar.gz"
-  extract "ncurses-6.6.tar.gz" "ncurses-6.6"
-  ( cd "$WORK/ncurses-6.6"
+  srcdir="$(emacs_dep_srcdir ncurses)"
+  archive="$(emacs_dep_fetch ncurses "$WORK")"
+  extract "$archive" "$srcdir"
+  ( cd "$WORK/$srcdir"
     ./configure --prefix="$PREFIX" --disable-shared \
                 --with-terminfo-dirs=/usr/share/terminfo:/usr/local/share/terminfo
     make -j"$JOBS"
@@ -129,11 +166,13 @@ stage_ncurses() {
 
 # Zlib: uses its own configure script (no autotools), takes --static, --prefix.
 stage_zlib() {
+  local srcdir archive
   if [[ -e "$PREFIX/lib/libz.a" ]]; then skip "Zlib"; return; fi
   log "Zlib"
-  fetch "https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.xz"
-  extract "zlib-1.3.2.tar.xz" "zlib-1.3.2"
-  ( cd "$WORK/zlib-1.3.2"
+  srcdir="$(emacs_dep_srcdir zlib)"
+  archive="$(emacs_dep_fetch zlib "$WORK")"
+  extract "$archive" "$srcdir"
+  ( cd "$WORK/$srcdir"
     ./configure --static --prefix="$PREFIX"
     make -j"$JOBS"
     make install )
@@ -142,11 +181,13 @@ stage_zlib() {
 # tree-sitter: no autoconf; Makefile honors PREFIX. Delete dylibs to force
 # static linkage in Emacs.
 stage_treesitter() {
+  local srcdir archive
   if [[ -e "$PREFIX/lib/libtree-sitter.a" ]]; then skip "tree-sitter"; return; fi
   log "tree-sitter"
-  fetch "https://github.com/tree-sitter/tree-sitter/archive/refs/tags/v0.25.10.tar.gz"
-  extract "v0.25.10.tar.gz" "tree-sitter-0.25.10"
-  ( cd "$WORK/tree-sitter-0.25.10"
+  srcdir="$(emacs_dep_srcdir treesitter)"
+  archive="$(emacs_dep_fetch treesitter "$WORK")"
+  extract "$archive" "$srcdir"
+  ( cd "$WORK/$srcdir"
     make -j"$JOBS" PREFIX="$PREFIX"
     make install PREFIX="$PREFIX" )
   find "$PREFIX/lib" -name 'libtree-sitter*.dylib' -delete
@@ -155,10 +196,14 @@ stage_treesitter() {
 # Emacs: fetch the locked Git commit; keep its own .git for true provenance.
 # Patch suitability/build readiness for this snapshot is not yet validated.
 stage_emacs() {
-  local src="$WORK/$EMACS_SOURCE_DIR"
+  local src="$WORK/$EMACS_SOURCE_DIR" deps_marker="$OUT/Contents/Resources/ebuild-deps.txt"
   emacs_check_output "$OUT"
   emacs_check_patches "$OUT"
   emacs_check_configuration "$OUT" "$PREFIX"
+  if [[ -e "$OUT" || -L "$OUT" ]] && ! deps_marker_matches "$deps_marker"; then
+    printf 'Emacs dependency/cache mismatch: %s has no matching dependency marker; use a fresh OUT path (nothing was deleted).\n' "$OUT" >&2
+    return 1
+  fi
   if [[ -e "$src" || -L "$src" ]]; then emacs_validate_source "$src"; fi
   if [[ -e "$OUT/Contents/MacOS/Emacs" ]]; then
     emacs_verify_bundle "$OUT"
@@ -189,6 +234,7 @@ stage_emacs() {
   emacs_mark_output "$OUT"
   emacs_mark_patches "$OUT"
   emacs_mark_configuration "$OUT" "$PREFIX"
+  printf '%s\n' "$DEPS_DIGEST" > "$deps_marker"
   emacs_sign_bundle "$OUT"
   log "Built: $OUT"
 }
