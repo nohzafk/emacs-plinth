@@ -1,14 +1,16 @@
 # The local patches: why, and how
 
-This repository, emacs-plinth, ships the emacs-plus UI patches and, on
-top of them, a small set of local patches: two to Emacs's xwidget support
+This repository, emacs-plinth, ships the emacs-plus UI patches (including
+a local rebase of `no-frame-refocus-cocoa`) and, on top of them, three
+local patches written for this repository: two to Emacs's xwidget support
 on macOS, and one to how a child frame grows, because that is where most
-of those views are shown. This document is the reasoning behind the local
-ones: what we wanted, what in Emacs stood in the way, what each patch
-changes and why it changes it that way. The README's *The patch set*
-lists what is applied; this file says why. The mechanics of applying
-patches (the lock file, SHA-256, `-F0`) are in the README and
-`scripts/emacs-patches.sh`.
+of those views are shown. This document is the reasoning behind those
+three patches: what we wanted, what in Emacs stood in the way, what each
+patch changes and why it changes it that way. The README's
+[The patch set](../README.md#the-patch-set) lists what is applied; this
+file says why. The mechanics of applying patches (the lock file, SHA-256,
+`-F0`) are in the README and
+[`scripts/emacs-patches.sh`](../scripts/emacs-patches.sh).
 
 ## What we wanted
 
@@ -48,7 +50,7 @@ made. Everything else in the xwidget machinery already works for any
 
 ## native-xwidget
 
-`patches/emacs-31/native-xwidget.patch`. NS (Cocoa) only.
+[`patches/emacs-31/native-xwidget.patch`](../patches/emacs-31/native-xwidget.patch). NS (Cocoa) only.
 
 **What it adds.** `make-xwidget` accepts the type `native`. Its ARGUMENTS
 parameter is then a user pointer, created by a dynamic module, whose
@@ -104,7 +106,7 @@ module also watches key events with a local monitor.
 
 ## ns-xwidget-scroll
 
-`patches/emacs-31/ns-xwidget-scroll.patch`. NS only; touches only
+[`patches/emacs-31/ns-xwidget-scroll.patch`](../patches/emacs-31/ns-xwidget-scroll.patch). NS only; touches only
 `src/nsterm.m`. The defect it fixes was found by measurement and is not
 caused by the patch above: it is in stock Emacs and affects WebKit
 xwidgets equally.
@@ -129,7 +131,7 @@ area, moves with its row as well.
 
 ## ns-child-frame-resize
 
-`patches/emacs-31/ns-child-frame-resize.patch`. NS only; touches
+[`patches/emacs-31/ns-child-frame-resize.patch`](../patches/emacs-31/ns-child-frame-resize.patch). NS only; touches
 `src/nsterm.m`, `src/nsterm.h` and `src/nsfns.m`. Applied last, after
 every patch above. Like `ns-xwidget-scroll`, it fixes stock Emacs, not
 something the `native` type introduced.
@@ -204,8 +206,7 @@ view. The whole story, with the harness and the measurements, is bendmacs's
   nothing about. A candidate for a later patch.
 - They do not add the `xwidget-webkit-title-change-hook` that some
   WebKit-based packages listen on. It does not exist in stock Emacs, and
-  nothing here needs it. (bendmacs no longer uses WebKit xwidgets at all;
-  when it did, a page reached Emacs through a loopback HTTP request.)
+  nothing here needs it.
 
 ## Upstream
 
@@ -220,11 +221,20 @@ established; whether to propose it is open.
 
 ## Verifying a change here
 
-`python3 tests/test_ui_patches.py` enumerates the patch set and asserts
-each patch's order and intended effect, so a patch that stops doing what
-this document says fails there. With `EBUILD_UI_TARGETS` pointing at a
-pristine checkout it also applies the whole set at `-F0`. `python3
-tests/test_source_pin.py` needs `BASH_ENV` unset (`env -u BASH_ENV`), as
-noted in the repository's friction log. A local build of only Emacs is
-`scripts/build.sh emacs` with `OUT` set to a new path: the script refuses
-to overwrite an app built from a different patch set.
+After editing a patch, update its SHA-256 in
+[`patches/ui-patches.lock`](../patches/ui-patches.lock) so
+[`scripts/emacs-patches.sh`](../scripts/emacs-patches.sh) and the tests
+accept it.
+
+`env -u BASH_ENV python3 tests/test_ui_patches.py` enumerates the patch
+set, checks every locked digest, and asserts each patch's order and
+intended effect, so a patch that stops doing what this document says
+fails there. With `EBUILD_UI_TARGETS` pointing at a pristine checkout of
+the pinned revision's `src/` and `lisp/term/`, it also applies the whole
+set at `-F0`. See [Tests](../README.md#tests) for running the full test
+suite and the integration check.
+
+To test a patch change in a local build after dependencies are built, run
+`scripts/build.sh emacs` with `OUT` set to a new path (see
+[Local build](../README.md#local-build)): the script refuses to overwrite
+an app built from a different patch set.

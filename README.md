@@ -2,7 +2,7 @@
 
 # emacs-plinth
 
-GNU Emacs 31.1 as a self-contained `Emacs.app` for Apple-silicon Macs.
+GNU Emacs 31.1 as a self-contained `Emacs.app` for Apple silicon, macOS 15.0 or later.
 Every library Emacs uses is compiled from source and linked statically
 into the app; only macOS's own frameworks are loaded from the system. The
 app needs no Homebrew or Nix, and upgrading or removing them cannot break
@@ -27,10 +27,11 @@ buffers and child frames.
   header-line scroll crash (bug#81585) and `delete-frame` stealing key-window
   focus.
 - **Immutable, verifiable releases**: each release pins the exact Emacs
-  commit SHA and SHA-256-locked patch list (`patch -F0`), records three
-  provenance markers in `Emacs.app/Contents/Resources/` before ad-hoc code
-  signing, publishes a `.sha256` digest beside the archive, and refuses to
-  reuse an existing release tag.
+  commit SHA, SHA-256-locked dependency archives, and SHA-256-locked patch
+  list (`patch -F0`), records four provenance markers in
+  `Emacs.app/Contents/Resources/` before ad-hoc code signing, publishes a
+  `.sha256` digest beside the archive, and refuses to reuse an existing
+  release tag.
 - **Terminal mode out of the box**: static `ncurses` is compiled with
   `/usr/share/terminfo` in its search path so `emacs -nw` and
   `emacsclient -t` work on machines without `/usr/local/share/terminfo`.
@@ -53,34 +54,20 @@ bendmacs and bendcord.el.
 
 ## Install
 
-Download the release asset and its digest, and check one against the other:
+Requires Apple silicon, macOS 15.0 or later.
+
+Download the release asset and its digest, verify the archive, and unpack it:
 
 ```bash
 curl -fLO https://github.com/nohzafk/emacs-plinth/releases/download/emacs-31.1-bendmacs.6/Emacs-31.1-bendmacs.6.tar.xz
-```
-
-```bash
 curl -fLO https://github.com/nohzafk/emacs-plinth/releases/download/emacs-31.1-bendmacs.6/Emacs-31.1-bendmacs.6.tar.xz.sha256
-```
-
-```bash
 shasum -a 256 -c Emacs-31.1-bendmacs.6.tar.xz.sha256
-```
-
-```bash
 tar -xJf Emacs-31.1-bendmacs.6.tar.xz
 ```
 
-The bundle carries three provenance markers in `Emacs.app/Contents/Resources/`:
-
-- `ebuild-source.txt`: the source repository, the full revision, and the
-  label the build directories are keyed by.
-- `ebuild-patches.txt`: `patchset=`, a SHA-256 over the ordered list of
-  patches (each one's digest and path), and the emacs-plus commit the
-  upstream patches come from. It matches the digest in the release notes.
-- `ebuild-configure.txt`: the configure arguments that were requested.
-
-The bundle is signed ad hoc after the markers are written, so
+The bundle carries four provenance markers in
+`Emacs.app/Contents/Resources/` (see [Provenance markers](#provenance-markers))
+and is signed ad hoc after they are written, so
 `codesign --verify --deep --strict Emacs.app` checks that nothing in it
 changed since. A browser download marks the files as quarantined; remove
 only that attribute:
@@ -112,11 +99,14 @@ and this repository's build number, and never moves:
 | Asset | `Emacs-31.1-bendmacs.6.tar.xz`, a tarball holding `Emacs.app` |
 | Digest | `Emacs-31.1-bendmacs.6.tar.xz.sha256`, beside the asset |
 
-New releases use `emacs-<version>-plinth.<N>` tags and
-`Emacs-<version>-plinth.<N>.tar.xz` assets. The build numbers continue
-from 7; published builds 1–6 keep their `bendmacs.<N>` tags and assets.
+New releases use `emacs-<version>-plinth.<N>` tags,
+`Emacs <version>, plinth build <N>` titles, and
+`Emacs-<version>-plinth.<N>.tar.xz` assets. Build numbers continue from 7;
+published builds 1–6 keep their `bendmacs.<N>` names, and CI refuses to
+reuse a build number under either prefix.
 
-The build number is `EMACS_BUILD_NUMBER` in `scripts/emacs-source.lock`.
+The build number is `EMACS_BUILD_NUMBER` in
+[`scripts/emacs-source.lock`](scripts/emacs-source.lock).
 Bump it by hand whenever the patch set, the configure arguments, or a
 dependency changes; a commit that changes only documentation or tests
 does not need a new release. The build job refuses to start when the tag
@@ -124,14 +114,15 @@ for its number already exists on GitHub, so a changed build cannot replace
 a published one under the same name, and a pin of a tag and its digest
 keeps meaning one set of bytes.
 
-The release notes list the source revision, the digest of the patch set,
-and the patches in the order they were applied, so what a build contains
-can be read without downloading it.
+The release notes list the source revision, the patch-set digest, the
+patches in the order they were applied, and the dependency lock SHA-256,
+so what a build contains can be read without downloading it.
 
 ## The patch set
 
 The patches are vendored under `patches/` and applied in the order
-`patches/ui-patches.lock` lists them. `scripts/emacs-patches.sh` checks
+[`patches/ui-patches.lock`](patches/ui-patches.lock) lists them.
+[`scripts/emacs-patches.sh`](scripts/emacs-patches.sh) checks
 each one against the SHA-256 in the lock, checks that every patch applies
 before it writes anything, and applies them with `patch -F0`, so a patch
 that no longer fits fails instead of being applied with fuzz. The local
@@ -190,8 +181,9 @@ forward and would reverse an upstream fix.
 
 ## Build configuration
 
-`scripts/emacs-configure.sh` configures Emacs with `CFLAGS='-O2 -g0 -flto=thin'`,
-`PKG_CONFIG='pkgconf -static'`, and options that enable:
+[`scripts/emacs-configure.sh`](scripts/emacs-configure.sh) configures Emacs
+with `CFLAGS='-O2 -g0 -flto=thin'`, `PKG_CONFIG='pkgconf -static'`, and
+options that enable:
 
 - GnuTLS (`--with-gnutls`)
 - Tree-sitter (`--with-tree-sitter`)
@@ -204,7 +196,10 @@ forward and would reverse an upstream fix.
 - `kqueue` file notifications, threads, toolkit scroll bars, compressed
   install, and the small Japanese dictionary (`--with-file-notification=kqueue`,
   `--with-threads`, `--with-toolkit-scroll-bars`, `--with-compress-install`,
-  `--with-small-ja-dic`, `--without-all`, `--disable-gc-mark-trace`)
+  `--with-small-ja-dic`)
+
+Other optional features and GC mark tracing are disabled (`--without-all`,
+`--disable-gc-mark-trace`).
 
 The GNU MP Bignum Library (`gmp`) is built in the static dependency prefix
 and detected automatically by `configure` (the obsolete `--with-gmp` flag is
@@ -239,13 +234,13 @@ errors in terminal mode.
 
 ## Source lock
 
-`scripts/emacs-source.lock` is the single source of truth for local and CI builds:
+[`scripts/emacs-source.lock`](scripts/emacs-source.lock) is the single source of truth for local and CI builds:
 
 - Repository: `https://github.com/emacs-mirror/emacs.git`
 - Commit: `a360712c9d272d950d8d8255ef74570f7e90b7d9`
 - Release: `emacs-31.1` (the upstream annotated tag points at this commit)
 - Label: `31-snapshot-a360712c9d272d950d8d8255ef74570f7e90b7d9`
-- Build number: `6`
+- Build number: `EMACS_BUILD_NUMBER` in [`scripts/emacs-source.lock`](scripts/emacs-source.lock)
 
 The shared helper fetches only this full commit SHA into a detached Git checkout.
 It does not follow `master`, an Emacs 31 branch, or the release tag itself: the
@@ -256,47 +251,57 @@ is fetched from Git rather than from the GNU release tarball.
 
 The Emacs checkout must have its own `.git`, the locked revision, and the expected origin. The build allows tracked changes from the pinned patches.
 
+### Dependency lock
+
 [`scripts/deps.lock`](scripts/deps.lock) pins the 19 dependency archives used by local and CI builds. Each row gives the stage, SHA-256, HTTPS URL, and extracted directory. Before extracting an archive, the build checks its bytes against the lock, including archives found in the download cache. To update a dependency, verify the new upstream archive and update its row.
 
-A reusable app has four markers under `Contents/Resources/`:
+### Provenance markers
 
-| Marker | What it identifies |
+Every built bundle carries four provenance markers under `Emacs.app/Contents/Resources/`, written before ad-hoc code signing:
+
+| Marker | What it records |
 | --- | --- |
-| `ebuild-source.txt` | Emacs source revision |
-| `ebuild-patches.txt` | Ordered patches and their provenance |
-| `ebuild-configure.txt` | Requested flags, options, and local prefix |
-| `ebuild-deps.txt` | SHA-256 of the complete dependency lockfile |
+| `ebuild-source.txt` | Source repository, full commit revision, and the label build directories are keyed by |
+| `ebuild-patches.txt` | `patchset=` (SHA-256 over the ordered patch digests and paths) and `provenance=` (the emacs-plus commit); matches the release notes |
+| `ebuild-configure.txt` | Requested `CFLAGS`, `PKG_CONFIG`, `--prefix=` (local builds only), and configure options |
+| `ebuild-deps.txt` | SHA-256 of the complete `scripts/deps.lock` file; matches the release notes |
 
-The dependency marker identifies source archives, not installed library binaries. These markers do not identify the compiler, SDK, inherited environment, or configure's detected results. CI names the release by version and build number; the bundle is always `Emacs.app`.
+`ebuild-deps.txt` identifies the locked source archives, not installed library binaries. These markers do not identify the compiler, SDK, inherited environment, or `configure`'s detected results. CI names the release archive by version and build number; the bundle inside is always `Emacs.app`.
 
 ## Local build
 
-`scripts/build.sh` installs into a private prefix rather than `/usr/local`. By default, the prefix, work directory, and app all live under `build/deps-<lock-SHA256>/`. Changing the lock selects fresh directories and leaves previous builds intact.
+[`scripts/build.sh`](scripts/build.sh) installs into a private prefix rather than `/usr/local`. By default, the prefix, work directory, and app all live under `build/deps-<lock-SHA256>/`. Changing the lock selects fresh directories and leaves previous builds intact.
 
 ```bash
-./scripts/build.sh                # build all dependencies and Emacs
-./scripts/build.sh emacs          # Emacs stage only; build dependencies first
+./scripts/build.sh                            # build all dependencies and Emacs
+./scripts/build.sh emacs                      # Emacs stage only; build dependencies first
+STAGES="m4 autoconf" ./scripts/build.sh       # selected stages only
 OUT="$PWD/build/try/Emacs.app" ./scripts/build.sh emacs
 PREFIX=/tmp/foo ./scripts/build.sh
 ```
 
-The default app path is `build/deps-<lock-SHA256>/emacs-31-snapshot-<Emacs-revision>/Emacs.app`. Rerunning with the same lock skips installed dependencies. The build reuses an app only if all four markers match and its signature verifies.
+The default app path is `build/deps-<lock-SHA256>/emacs-31-snapshot-<Emacs-revision>/Emacs.app`. `JOBS` sets the make parallelism and defaults to `sysctl -n hw.ncpu`. Each dependency writes a sentinel in `$PREFIX`, so rerunning with the same lock skips installed dependencies; delete a sentinel (or use a fresh `PREFIX`) to rebuild it. The build reuses an existing app only if all four [provenance markers](#provenance-markers) match and its signature verifies. Smoke-test a built bundle with `'<OUT>/Contents/MacOS/Emacs' --version`.
 
-If you override `PREFIX` or `WORK`, use a fresh directory or one already marked for this lock. For `OUT`, use an absolute path to a new or matching app. The build refuses mismatched caches rather than deleting them. Local builds carry no release number; only CI publishes.
+If you override `PREFIX` or `WORK`, use a fresh directory or one already marked for this lock (`ebuild-deps.txt`). For `OUT`, use a new path or a matching app. Relative overrides for `PREFIX`, `WORK`, and `OUT` are resolved against the working directory you invoke `scripts/build.sh` from. The build refuses mismatched caches rather than deleting them. Local builds carry no release number; only CI publishes.
 
 ## Tests
 
 The tests are offline: they need no Emacs source, no download, and no build
-stage.
+stage. They cover the source pin and release scheme (`test_source_pin.py`),
+dependency archive locking (`test_emacs_deps.py`), local build cache checks
+(`test_local_deps_cache.py`), patch locking and strict `-F0` application
+(`test_ui_patches.py`), configure policy (`test_configure_policy.py`), and
+bundle signing (`test_bundle_sign.py`).
 
 ```bash
 env -u BASH_ENV python3 -m unittest discover -s tests -p 'test_*.py'
 ```
 
 `BASH_ENV` is unset because every bash the tests start would source it,
-and a shell environment can put a real `git` ahead of the tests' fake one.
-`test_source_pin.py` also checks the release scheme: the names derived from
-the build number, the refusal of an existing tag, and the release notes.
+and a shell environment can put a real `git` or `curl` ahead of the tests'
+mocks. `test_source_pin.py` also checks the release scheme: the names derived
+from the build number, the refusal of an existing tag or legacy build number,
+and the release notes.
 
 `tests/test_ui_patches.py` can also apply the whole patch set at `-F0` to
 the real files of the pinned revision. Point `EBUILD_UI_TARGETS` at a
@@ -333,5 +338,7 @@ identifiers only.
 GNU GPL version 3 or later, see [LICENSE](LICENSE): the patches are
 derivative works of GNU Emacs, and so is the `Emacs.app` each release
 publishes. The complete corresponding source of a release is the pinned
-commit named in `scripts/emacs-source.lock` plus the patch set under
-`patches/`, both recorded in the bundle's provenance markers.
+commit named in [`scripts/emacs-source.lock`](scripts/emacs-source.lock),
+the patch set under `patches/`, and the dependency archives pinned in
+[`scripts/deps.lock`](scripts/deps.lock), all recorded in the bundle's
+[provenance markers](#provenance-markers).
