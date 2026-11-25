@@ -28,7 +28,7 @@ class SourcePinTests(unittest.TestCase):
     def test_lock_names_the_upstream_release(self):
         lock = (ROOT / "scripts/emacs-source.lock").read_text()
         self.assertIn('readonly EMACS_SOURCE_RELEASE_TAG="emacs-31.1"', lock)
-        self.assertIn('readonly EMACS_BUILD_NUMBER="6"', lock)
+        self.assertIn('readonly EMACS_BUILD_NUMBER="7"', lock)
         self.assertIn(f'readonly EMACS_SOURCE_REVISION="{PIN}"', lock)
         self.assertNotIn("This is a development snapshot", lock)
         self.assertNotIn("not an official", lock)
@@ -127,9 +127,9 @@ esac
         self.assertEqual(values, {
             "EMACS_SOURCE_LABEL": f"31-snapshot-{PIN}",
             "EMACS_SOURCE_DIR": f"emacs-31-snapshot-{PIN}",
-            "EMACS_ARTIFACT": "Emacs-31.1-plinth.6.tar.xz",
-            "EMACS_RELEASE_TAG": "emacs-31.1-plinth.6",
-            "EMACS_RELEASE_NAME": "Emacs 31.1, plinth build 6"})
+            "EMACS_ARTIFACT": "Emacs-31.1-plinth.7.tar.xz",
+            "EMACS_RELEASE_TAG": "emacs-31.1-plinth.7",
+            "EMACS_RELEASE_NAME": "Emacs 31.1, plinth build 7"})
         self.assertIn('emacs_prepare_source "$GITHUB_WORKSPACE/$EMACS_SOURCE_DIR"', run_block("Build Emacs"))
         self.assertNotIn("30.2", CI)
         self.assertNotIn("30.2", LOCAL)
@@ -211,8 +211,8 @@ esac
         p = self.shell('printf "%s\\n" "$EMACS_RELEASE_TAG" "$EMACS_RELEASE_NAME" '
                        '"$EMACS_ARTIFACT" "$EMACS_RELEASE_VERSION"')
         self.assertEqual(p.stdout.splitlines(), [
-            "emacs-31.1-plinth.6", "Emacs 31.1, plinth build 6",
-            "Emacs-31.1-plinth.6.tar.xz", "31.1"])
+            "emacs-31.1-plinth.7", "Emacs 31.1, plinth build 7",
+            "Emacs-31.1-plinth.7.tar.xz", "31.1"])
 
     def lock_variant(self, old, new):
         """A copy of the helper beside a lock with OLD replaced by NEW."""
@@ -227,23 +227,22 @@ esac
     def test_bad_build_number_rejected(self):
         for bad in ("0", "02", "3a", ""):
             with self.subTest(bad=bad):
-                self.lock_variant('EMACS_BUILD_NUMBER="6"', f'EMACS_BUILD_NUMBER="{bad}"')
+                self.lock_variant('EMACS_BUILD_NUMBER="7"', f'EMACS_BUILD_NUMBER="{bad}"')
                 self.shell('true', ok=False)
                 shutil.rmtree(self.work / "variant")
 
     def test_next_build_number_names_a_new_release(self):
-        self.lock_variant('EMACS_BUILD_NUMBER="6"', 'EMACS_BUILD_NUMBER="7"')
+        self.lock_variant('EMACS_BUILD_NUMBER="7"', 'EMACS_BUILD_NUMBER="8"')
         p = self.shell('printf "%s\\n" "$EMACS_RELEASE_TAG" "$EMACS_ARTIFACT"')
         self.assertEqual(p.stdout.splitlines(),
-                         ["emacs-31.1-plinth.7", "Emacs-31.1-plinth.7.tar.xz"])
+                         ["emacs-31.1-plinth.8", "Emacs-31.1-plinth.8.tar.xz"])
 
     def test_free_release_tag_accepted(self):
-        self.lock_variant('EMACS_BUILD_NUMBER="6"', 'EMACS_BUILD_NUMBER="7"')
         self.env["FAKE_RELEASE_REF"] = "refs/tags/emacs-31.1-bendmacs.6"
         self.shell("emacs_check_release_tag_free repo")
 
     def test_existing_release_tag_refused(self):
-        self.env["FAKE_RELEASE_REF"] = "refs/tags/emacs-31.1-plinth.6"
+        self.env["FAKE_RELEASE_REF"] = "refs/tags/emacs-31.1-plinth.7"
         p = self.shell("emacs_check_release_tag_free repo", ok=False)
         self.assertIn("bump EMACS_BUILD_NUMBER", p.stderr)
 
@@ -251,11 +250,14 @@ esac
         self.env["FAKE_RELEASE_REF"] = "refs/tags/emacs-31.1-bendmacs.6"
         for version in ("31.1", "31.2"):
             with self.subTest(version=version):
-                if version != "31.1":
-                    self.lock_variant(
-                        'EMACS_SOURCE_RELEASE_TAG="emacs-31.1"',
-                        f'EMACS_SOURCE_RELEASE_TAG="emacs-{version}"',
-                    )
+                shutil.rmtree(self.work / "variant", ignore_errors=True)
+                self.lock_variant(
+                    'EMACS_SOURCE_RELEASE_TAG="emacs-31.1"',
+                    f'EMACS_SOURCE_RELEASE_TAG="emacs-{version}"',
+                )
+                lock = self.work / "variant/emacs-source.lock"
+                lock.write_text(lock.read_text().replace(
+                    'EMACS_BUILD_NUMBER="7"', 'EMACS_BUILD_NUMBER="6"'))
                 p = self.shell("emacs_check_release_tag_free repo", ok=False)
                 self.assertIn(self.env["FAKE_RELEASE_REF"], p.stderr)
                 self.assertIn("bump EMACS_BUILD_NUMBER", p.stderr)
@@ -330,7 +332,7 @@ esac
         digest = marker.split("patchset=", 1)[1].split("\n", 1)[0]
         self.assertRegex(digest, r"^[0-9a-f]{64}$")
         self.assertTrue(notes.startswith("Emacs 31.1 for macOS on Apple silicon: "
-                                         "build 6 of emacs-plinth.\n"), notes)
+                                         "build 7 of emacs-plinth.\n"), notes)
         self.assertIn(f"`{PIN}`", notes)
         self.assertIn(f"`patchset={digest}`", notes)
         lock = (ROOT / "patches/ui-patches.lock").read_text().splitlines()
@@ -338,7 +340,7 @@ esac
         listed = re.findall(r"^  - `(.+)`$", notes, re.M)
         self.assertEqual(listed, patches)
         self.assertEqual(len(listed), 8)
-        self.assertIn("`shasum -a 256 -c Emacs-31.1-plinth.6.tar.xz.sha256`", notes)
+        self.assertIn("`shasum -a 256 -c Emacs-31.1-plinth.7.tar.xz.sha256`", notes)
         self.assertIn("No font is bundled", notes)
 
     def test_release_notes_refuse_a_bundle_from_another_patch_set(self):

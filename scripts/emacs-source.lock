@@ -12,4 +12,4 @@ readonly EMACS_SOURCE_RELEASE_NAME="Emacs 31.1"
 # the patch set, the configure arguments or a dependency changes: the release
 # is tagged emacs-<version>-plinth.<N>. CI refuses to reuse a legacy
 # bendmacs.<N> build number or overwrite a published release tag.
-readonly EMACS_BUILD_NUMBER="6"
+readonly EMACS_BUILD_NUMBER="7"
